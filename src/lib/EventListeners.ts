@@ -147,7 +147,8 @@ export class EventListeners {
         is_vrm,
         vrm_src,
         vrm_name,
-        bone_name_map
+        bone_name_map,
+        (this.bootstrap.load_model_step as any).get_vrm_instance?.()
       )
       this.bootstrap.file_export_step.export(this.bootstrap.weight_skin_step.final_skinned_meshes(), 'exported-model')
     })
