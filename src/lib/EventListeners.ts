@@ -2,8 +2,6 @@ import { type Bootstrap } from '../script'
 import { ModelPreviewDisplay } from './enums/ModelPreviewDisplay'
 import { ProcessStep } from './enums/ProcessStep'
 import { Utility } from './Utilities'
-
-
 export class EventListeners {
   constructor (private readonly bootstrap: Bootstrap) {}
 
@@ -15,7 +13,7 @@ export class EventListeners {
 
     // listen for view helper changes
     document.getElementById('view-control-hitbox')?.addEventListener('pointerdown', (event: PointerEvent) => {
-      if (this.bootstrap.view_helper.handleClick(event)) {
+      if (this.bootstrap.view_helper?.handleClick(event)) {
         event.stopPropagation()
         event.preventDefault()
       }
@@ -36,21 +34,24 @@ export class EventListeners {
       this.bootstrap.handle_transform_controls_mouse_down(event)
 
       // update UI with current bone name
-      if (this.bootstrap.ui.dom_selected_bone_label !== null &&
-        this.bootstrap.edit_skeleton_step.get_currently_selected_bone() !== null) {
-        this.bootstrap.ui.dom_selected_bone_label.innerHTML =
-          this.bootstrap.edit_skeleton_step.get_currently_selected_bone().name
+      const current_bone = this.bootstrap.edit_skeleton_step.get_currently_selected_bone()
+      if (this.bootstrap.ui.dom_selected_bone_label !== null && current_bone !== null) {
+        this.bootstrap.ui.dom_selected_bone_label.innerHTML = current_bone.name
       }
     }, false)
 
     // custom event listeners for the transform controls.
     // we can know about the "mouseup" event with this
     this.bootstrap.transform_controls?.addEventListener('dragging-changed', (event: any) => {
-      this.bootstrap.is_transform_controls_dragging = event.value
-      this.bootstrap.controls.enabled = !event.value
+      const drag_event = event as { value: boolean }
+      const is_dragging: boolean = !!drag_event.value
+      this.bootstrap.is_transform_controls_dragging = is_dragging
+      if (this.bootstrap.controls !== undefined) {
+        this.bootstrap.controls.enabled = !is_dragging
+      }
 
       // Store undo state when we start dragging (event.value = true)
-      if (event.value && this.bootstrap.process_step === ProcessStep.EditSkeleton) {
+      if (is_dragging && this.bootstrap.process_step === ProcessStep.EditSkeleton) {
         this.bootstrap.edit_skeleton_step.store_bone_state_for_undo()
       }
 
@@ -80,15 +81,15 @@ export class EventListeners {
 
     // rotate model after loading it in to orient it correctly
     this.bootstrap.ui.dom_rotate_model_x_button?.addEventListener('click', () => {
-  this.bootstrap.load_model_step.rotate_model_geometry('x', 90)
+      this.bootstrap.load_model_step.rotate_model_geometry('x', 90)
     })
 
     this.bootstrap.ui.dom_rotate_model_y_button?.addEventListener('click', () => {
-  this.bootstrap.load_model_step.rotate_model_geometry('y', 90)
+      this.bootstrap.load_model_step.rotate_model_geometry('y', 90)
     })
 
     this.bootstrap.ui.dom_rotate_model_z_button?.addEventListener('click', () => {
-  this.bootstrap.load_model_step.rotate_model_geometry('z', 90)
+      this.bootstrap.load_model_step.rotate_model_geometry('z', 90)
     })
 
     this.bootstrap.ui.dom_move_model_to_floor_button?.addEventListener('click', () => {
@@ -96,8 +97,9 @@ export class EventListeners {
     })
 
     this.bootstrap.ui.dom_show_skeleton_checkbox?.addEventListener('click', (event: MouseEvent) => {
-      if (this.bootstrap.skeleton_helper !== undefined) {
-        this.bootstrap.skeleton_helper.visible = event.target.checked
+      const target = event.target as HTMLInputElement | null
+      if (this.bootstrap.skeleton_helper !== undefined && target !== null) {
+        this.bootstrap.skeleton_helper.visible = !!target.checked
       } else {
         console.warn('Skeleton helper is undefined, so we cannot show it')
       }
@@ -108,6 +110,45 @@ export class EventListeners {
       const animations_to_export: number[] = this.bootstrap.animations_listing_step.get_animation_indices_to_export()
 
       this.bootstrap.file_export_step.set_animation_clips_to_export(all_clips, animations_to_export)
+      // Pass VRM context if we loaded a VRM model
+      const is_vrm = this.bootstrap.load_model_step.is_vrm_loaded()
+      const vrm_src = this.bootstrap.load_model_step.get_vrm_source_data_url()
+      const vrm_name = this.bootstrap.load_model_step.get_original_uploaded_filename()
+      const vrm_inst: any = (this.bootstrap.load_model_step as any).get_vrm_instance?.()
+
+      // Build a reverse bone map (node.name -> humanoid bone name) if humanoid is present
+      let bone_name_map: Record<string, string> | undefined
+      const humanoid = vrm_inst?.humanoid
+      const human_bones = humanoid?.humanBones
+      if (Array.isArray(human_bones)) {
+        const map: Record<string, string> = {}
+        human_bones.forEach((hb: any) => {
+          const node_name: string | undefined = hb?.node?.name
+          const bone_name: string | undefined = hb?.bone
+          if (node_name != null && node_name !== '' && bone_name != null && bone_name !== '') {
+            map[node_name] = bone_name
+          }
+        })
+        bone_name_map = map
+      } else if (human_bones != null && typeof human_bones === 'object') {
+        const map: Record<string, string> = {}
+        Object.keys(human_bones as Record<string, unknown>).forEach((key: string) => {
+          const hb: any = (human_bones as Record<string, unknown>)[key]
+          const node_name: string | undefined = hb?.node?.name
+          const bone_name: string = key
+          if (node_name != null && node_name !== '' && bone_name !== '') {
+            map[node_name] = bone_name
+          }
+        })
+        bone_name_map = map
+      }
+
+      this.bootstrap.file_export_step.set_vrm_context(
+        is_vrm,
+        vrm_src,
+        vrm_name,
+        bone_name_map
+      )
       this.bootstrap.file_export_step.export(this.bootstrap.weight_skin_step.final_skinned_meshes(), 'exported-model')
     })
 
@@ -119,7 +160,7 @@ export class EventListeners {
       this.bootstrap.process_step = this.bootstrap.process_step_changed(ProcessStep.EditSkeleton)
 
       // reset current bone selection for edit skeleton step
-      this.bootstrap.edit_skeleton_step.set_currently_selected_bone(null)
+      this.bootstrap.edit_skeleton_step.set_currently_selected_bone?.(null as any)
 
       if (this.bootstrap.ui.dom_selected_bone_label !== null) {
         this.bootstrap.ui.dom_selected_bone_label.innerHTML = 'None'
@@ -139,7 +180,8 @@ export class EventListeners {
     })
 
     this.bootstrap.ui.dom_transform_type_radio_group?.addEventListener('change', (event: Event) => {
-      const radio_button_selected: string | null = event.target?.value
+      const target = event.target as HTMLInputElement | null
+      const radio_button_selected: string | null = target?.value ?? null
 
       if (radio_button_selected === null) {
         console.warn('Null radio button selected for transform type change')
@@ -151,7 +193,8 @@ export class EventListeners {
 
     // changing the 3d model preview while editing the skeleton bones
     this.bootstrap.ui.dom_mesh_preview_group?.addEventListener('change', (event: Event) => {
-      const radio_button_selected: string | null = event.target?.value
+      const target = event.target as HTMLInputElement | null
+      const radio_button_selected: string | null = target?.value ?? null
 
       if (radio_button_selected === null) {
         console.warn('Null radio button selected for mesh preview type change')

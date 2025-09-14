@@ -38,6 +38,8 @@ export class Bootstrap {
   public readonly transform_controls_hover_distance: number = 0.03 // distance to hover over bones to select them
 
   public view_helper: CustomViewHelper // mini 3d view to help orient orthographic views
+  // has UI elements on the HTML page that we will reference/use
+  | undefined // mini 3d view to help orient orthographic views
 
   // has UI elements on the HTML page that we will reference/use
   public readonly theme_manager = new ThemeManager()

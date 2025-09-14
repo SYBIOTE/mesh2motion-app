@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title style="display: none">Mesh2Motion Application</title>
+    <title style="display: none">Nirvana Avatar</title>
     <link rel="icon" type="image/png" href="./images/favicon.png"/>
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
     <meta charset="UTF-8">
@@ -62,7 +62,7 @@
                             <span>Upload</span>
                         </span>
                     </label>
-                    <input id="model-upload" type="file" name="file-upload" accept=".glb, .gltf, .fbx" />
+                    <input id="model-upload" type="file" name="file-upload" accept=".glb, .gltf, .fbx, .vrm" />
 
                     <div style="text-align: center; font-size: 1.5rem">or</div>
                     
@@ -289,7 +289,14 @@
         
        
 
-                    <div style="display: flex; gap: 0.5rem;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <label for="export-format" style="font-size: 0.9rem;">Format:</label>
+                        <select id="export-format" title="Choose export format">
+                            <option value="glb" selected>GLB</option>
+                            <option value="vrm">VRM</option>
+                            <option value="fbx">FBX</option>
+                        </select>
+
                         <button class="secondary-button" id="action_back_to_edit_skeleton" >&#x2039; Back</button>
                         
                         <button id="export-button" title="Export animations. Make sure to select the animations you want to export first.">
