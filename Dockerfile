@@ -7,8 +7,8 @@ WORKDIR /app
 COPY ./ .
 
 RUN sed -i "s/open: !isCodeSandbox/open: false/" vite.config.js
-RUN npm install
+RUN corepack enable && corepack prepare pnpm@latest --activate && pnpm install
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["pnpm", "run", "dev"]
