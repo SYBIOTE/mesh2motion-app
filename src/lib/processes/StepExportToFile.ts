@@ -84,13 +84,13 @@ export class StepExportToFile extends EventTarget {
   }
 
   private reparent_after_export (skinned_meshes: any[], export_scene: Scene, original_parents: Map<any, any>): void {
-    skinned_meshes.forEach((final_skinned_mesh) => {
-      const original_par = original_parents.get(final_skinned_mesh)
-      if (original_par != null) {
-        original_par.add(final_skinned_mesh)
-      } else {
-        export_scene.remove(final_skinned_mesh)
-        console.log('ERROR: No original parent found for skinned mesh when exporting and re-parenting to original scene')
+        skinned_meshes.forEach((final_skinned_mesh) => {
+          const original_par = original_parents.get(final_skinned_mesh)
+          if (original_par != null) {
+            original_par.add(final_skinned_mesh)
+          } else {
+            export_scene.remove(final_skinned_mesh)
+            console.log('ERROR: No original parent found for skinned mesh when exporting and re-parenting to original scene')
       }
     })
   }

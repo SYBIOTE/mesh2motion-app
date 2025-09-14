@@ -23,6 +23,9 @@ importers:
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      navigo:
+        specifier: ^8.11.1
+        version: 8.11.1
       three:
         specifier: ^0.179.1
         version: 0.179.1
@@ -1081,6 +1084,9 @@ packages:
 
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
+
+  navigo@8.11.1:
+    resolution: {integrity: sha512-e3sc1UzakF+bWquC8/dbPCgo7LgPEW1ekgwb4pmEcl8tOc/I7lML8r7HBql+b0VRk7tJWTZqtkeObwJAVR1pxg==}
 
   object-inspect@1.13.4:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
@@ -2609,6 +2615,8 @@ snapshots:
   nanoid@3.3.11: {}
 
   natural-compare@1.4.0: {}
+
+  navigo@8.11.1: {}
 
   object-inspect@1.13.4: {}
 

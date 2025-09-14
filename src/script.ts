@@ -16,7 +16,7 @@ import { StepExportToFile } from './lib/processes/StepExportToFile.ts'
 import { StepWeightSkin } from './lib/processes/StepWeightSkin.ts'
 
 import { ProcessStep } from './lib/enums/ProcessStep.ts'
-import { type Bone, Group, Scene, type Skeleton, type Vector3 } from 'three'
+import { type Bone, Group, Scene, type Skeleton, type Vector3, type Object3D } from 'three'
 import type BoneTesterData from './lib/models/BoneTesterData.ts'
 
 import { build_version } from './environment.js'
@@ -27,6 +27,7 @@ import { EventListeners } from './lib/EventListeners.ts'
 import { ModelPreviewDisplay } from './lib/enums/ModelPreviewDisplay.ts'
 import { TransformControlType } from './lib/enums/TransformControlType.ts'
 import { ThemeManager } from './lib/ThemeManager.ts'
+import { AppRouter } from './lib/AppRouter'
 
 export class Bootstrap {
   public readonly camera = Generators.create_camera()
@@ -35,13 +36,10 @@ export class Bootstrap {
 
   public readonly transform_controls: TransformControls = new TransformControls(this.camera, this.renderer.domElement)
   public is_transform_controls_dragging: boolean = false
-  public readonly transform_controls_hover_distance: number = 0.03 // distance to hover over bones to select them
+  public readonly transform_controls_hover_distance: number = 0.03
 
-  public view_helper: CustomViewHelper // mini 3d view to help orient orthographic views
-  // has UI elements on the HTML page that we will reference/use
-  | undefined // mini 3d view to help orient orthographic views
+  public view_helper: CustomViewHelper
 
-  // has UI elements on the HTML page that we will reference/use
   public readonly theme_manager = new ThemeManager()
   public readonly ui = new UI()
   public readonly load_model_step = new StepLoadModel()
@@ -52,42 +50,36 @@ export class Bootstrap {
   public readonly file_export_step = new StepExportToFile()
   public readonly scene: Scene = new Scene()
 
-  // for looking at specific bones
   public process_step: ProcessStep = ProcessStep.LoadModel
   public skeleton_helper: CustomSkeletonHelper | undefined = undefined
   public debugging_visual_object: Group = new Group()
 
-  // when editing the skeleton, what type of mesh will we see
   public mesh_preview_display_type: ModelPreviewDisplay = ModelPreviewDisplay.WeightPainted
   public transform_controls_type: TransformControlType = TransformControlType.Translation
 
   private readonly clock = new THREE.Clock()
-
   private environment_container: Group = new Group()
   private readonly eventListeners: EventListeners
-
+  private readonly router: AppRouter
 
   public initialize (): void {
     this.setup_environment()
     this.eventListeners.addEventListeners()
+    this.router.init()
     this.process_step = this.process_step_changed(ProcessStep.LoadModel)
-    this.animate() // start the render loop which will continue rendering the scene
+    this.animate()
     this.inject_build_version()
-  } // end initialize()
+  }
 
   constructor () {
     this.eventListeners = new EventListeners(this)
-    // helps resolve requestAnimationFrame calling animate() with wrong context
+    this.router = new AppRouter(this)
     this.animate = this.animate.bind(this)
 
-    // Listen for skeleton transformation events to update UI and visuals
     this.edit_skeleton_step.addEventListener('skeletonTransformed', () => {
-      // Update skeleton helper if it exists
       if (this.skeleton_helper !== undefined) {
         this.regenerate_skeleton_helper(this.edit_skeleton_step.skeleton(), 'Skeleton Helper')
       }
-
-      // Refresh weight painting if in weight painted mode
       if (this.mesh_preview_display_type === ModelPreviewDisplay.WeightPainted) {
         this.regenerate_weight_painted_preview_mesh()
       }
@@ -204,16 +196,10 @@ export class Bootstrap {
   }
 
   public process_step_changed (process_step: ProcessStep): ProcessStep {
-    // we will have the current step turn on the UI elements it needs
     this.ui.hide_all_elements()
-
-    // clean up things related to edit step in case we are leaving it
     this.edit_skeleton_step.cleanup_on_exit_step()
-
-    // only show animation player on the animation listing page
     if (this.ui.dom_animation_player !== null) {
       this.ui.dom_animation_player.style.display = 'none'
-
       if (process_step === ProcessStep.AnimationsListing) {
         this.ui.dom_animation_player.style.display = 'flex'
       }
@@ -221,32 +207,21 @@ export class Bootstrap {
 
     switch (process_step) {
       case ProcessStep.LoadModel:
-
-        // reset the state in the case of coming back to this step
         if (this.load_model_step.model_meshes() !== undefined) {
-          const imported_model = this.scene.getObjectByName('Imported Model')
+          const imported_model = this.scene.getObjectByName('Imported Model') as Object3D | null
           if (imported_model !== null) {
             this.scene.remove(imported_model)
           }
         }
-
         process_step = ProcessStep.LoadModel
         this.load_model_step.begin()
         break
       case ProcessStep.LoadSkeleton:
-
-        // Resetting state for the load skeleton step
-
-        // if skeleton helper existed because we are going back to this
         if (this.skeleton_helper !== undefined) {
           this.scene.remove(this.skeleton_helper)
         }
-
-        // need to change the texture display to normal material in
         this.mesh_preview_display_type = ModelPreviewDisplay.Textured
         this.changed_model_preview_display(this.mesh_preview_display_type)
-
-        // initializing all the load skeleton step stuff
         this.scene.add(this.load_model_step.model_meshes())
         process_step = ProcessStep.LoadSkeleton
         this.load_skeleton_step.begin()
@@ -257,58 +232,44 @@ export class Bootstrap {
         this.edit_skeleton_step.begin()
         this.edit_skeleton_step.setup_scene(this.scene)
         this.transform_controls.enabled = true
-        this.transform_controls.setMode(this.transform_controls_type) // 'translate', 'rotate'
-
+        this.transform_controls.setMode(this.transform_controls_type)
         this.skeleton_helper?.setJointsVisible(true)
-
         this.mesh_preview_display_type = ModelPreviewDisplay.WeightPainted
-        this.changed_model_preview_display(this.mesh_preview_display_type) // show weight painted mesh by default
+        this.changed_model_preview_display(this.mesh_preview_display_type)
         break
       case ProcessStep.BindPose:
         this.process_step = ProcessStep.BindPose
-        this.transform_controls.enabled = false // shouldn't be editing bones
+        this.transform_controls.enabled = false
         this.calculate_skin_weighting_for_models()
         this.regenerate_skeleton_helper(this.weight_skin_step.skeleton())
-        this.scene.add(...this.weight_skin_step.final_skinned_meshes()) // add final skinned mesh to scene
-        this.weight_skin_step.weight_painted_mesh_group().visible = false // hide weight painted mesh
+        this.scene.add(...this.weight_skin_step.final_skinned_meshes())
+        this.weight_skin_step.weight_painted_mesh_group().visible = false
         this.process_step_changed(ProcessStep.AnimationsListing)
         break
       case ProcessStep.AnimationsListing:
         this.process_step = ProcessStep.AnimationsListing
         this.animations_listing_step.begin()
-
         this.skeleton_helper?.setJointsVisible(false)
-
-        // hide skeleton by default in animations listing step
         if (this.ui.dom_show_skeleton_checkbox !== null) {
-          this.ui.dom_show_skeleton_checkbox.checked = false 
+          this.ui.dom_show_skeleton_checkbox.checked = false
         }
-
-        // Show/hide A-Pose correction options based on skeleton type
         this.update_a_pose_options_visibility()
-
-        // calculate hip bone offset for human skeleton type
         if (this.load_skeleton_step.skeleton_type() === SkeletonType.Human) {
           this.animations_listing_step.calculate_hip_bone_offset(this.load_skeleton_step.armature(),
             this.edit_skeleton_step.armature())
         }
-
         this.animations_listing_step.load_and_apply_default_animation_to_skinned_mesh(this.weight_skin_step.final_skinned_meshes(),
           this.load_skeleton_step.skeleton_type())
-
         if (this.skeleton_helper !== undefined) {
-          this.skeleton_helper.hide() // hide skeleton helper in animations listing step
+          this.skeleton_helper.hide()
         }
-
         break
     }
 
-    // when we change steps, we are re-creating the skeleeton and helper
-    // so the current transform control reference will be lost/give an error
     this.transform_controls.detach()
-
+    this.router.update(process_step)
     return process_step
-  } // end process_step_changed()
+  }
 
   private animate (): void {
     requestAnimationFrame(this.animate)
@@ -341,7 +302,7 @@ export class Bootstrap {
 
     // show/hide weight painted mesh depending on view
     this.weight_skin_step.weight_painted_mesh_group().visible =
-      this.mesh_preview_display_type === ModelPreviewDisplay.WeightPainted
+			this.mesh_preview_display_type === ModelPreviewDisplay.WeightPainted
   }
 
   public changed_transform_controls_mode (radio_button_selected: string): void {
@@ -364,7 +325,7 @@ export class Bootstrap {
     // primary click is made for rotating around 3d scene
     const is_primary_button_click = mouse_event.button === 0
 
-    if (is_primary_button_click === false) { return }
+    if (!is_primary_button_click) { return }
 
     if (this.edit_skeleton_step.skeleton()?.bones === undefined) { return }
 
@@ -494,7 +455,7 @@ export class Bootstrap {
 
       if (tester_data.bones_names_with_errors.length > 0) {
         const names_with_object_index: string[] =
-          tester_data.bones_names_with_errors.map((bone_name: string) => bone_name + ` ${mesh_geometry.name}`)
+					tester_data.bones_names_with_errors.map((bone_name: string) => bone_name + ` ${mesh_geometry.name}`)
         this.show_skin_failure_message(names_with_object_index, tester_data.bones_vertices_with_errors)
         testing_geometry_success = false
       }
