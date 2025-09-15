@@ -143,7 +143,7 @@ export class StepEditSkeleton extends EventTarget {
    * @description This is the bone that is currently selected in the UI while editing
    * the skeleton.
    */
-  public set_currently_selected_bone (bone: Bone): void {
+  public set_currently_selected_bone (bone: Bone | null): void {
     this.currently_selected_bone = bone
   }
 

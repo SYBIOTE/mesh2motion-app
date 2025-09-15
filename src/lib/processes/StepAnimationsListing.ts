@@ -39,15 +39,30 @@ export class StepAnimationsListing extends EventTarget {
   // the human model has a hip bone that needs position changes applied
   // This will be for animations like falling. We need to capture the offset between
   // the original position and the new position from our edited armature
-  public calculate_hip_bone_offset (original_armature: Object3D, edited_armature: Object3D): void {
-    const original_hip_bone: Bone = this.find_bone_from_armature(original_armature, 'DEF-hips')
-    const edited_hip_bone: Bone = this.find_bone_from_armature(edited_armature, 'DEF-hips')
+  public calculate_hip_bone_offset (original_armature: Object3D | null | undefined, edited_armature: Object3D | null | undefined): void {
+    if (original_armature == null || edited_armature == null) {
+      console.warn('Hip offset: armature(s) missing; skipping calculation')
+      return
+    }
+
+    const original_hip_bone: Bone | null = this.find_bone_from_armature(original_armature, 'DEF-hips')
+    const edited_hip_bone: Bone | null = this.find_bone_from_armature(edited_armature, 'DEF-hips')
+
+    if (original_hip_bone == null || edited_hip_bone == null) {
+      console.warn('Hip offset: hip bone not found; skipping calculation')
+      return
+    }
+
     this.hip_bone_offset = this.calculate_position_offset(original_hip_bone.position, edited_hip_bone.position)
 
     // calculate the scale factor for the animation clips
     // this should take the distance between the original and edited armature
     // and divide it by the original armature hip bone position
-    this.hip_bone_scale_factor_z = edited_hip_bone.position.z / original_hip_bone.position.z
+    if (original_hip_bone.position.z !== 0) {
+      this.hip_bone_scale_factor_z = edited_hip_bone.position.z / original_hip_bone.position.z
+    } else {
+      this.hip_bone_scale_factor_z = 1.0
+    }
  
     // small T-pose offset that somehow is getting lost
     this.hip_bone_offset = this.hip_bone_offset.sub(new Vector3(0, 0, -0.04))

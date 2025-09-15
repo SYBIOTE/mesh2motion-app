@@ -157,7 +157,7 @@ export class StepWeightSkin extends EventTarget {
     return this.skinned_meshes
   }
 
-  public weight_painted_mesh_group (): Group | null {
+  public weight_painted_mesh_group (): Group {
     return this.weight_painted_mesh_preview
   }
 
@@ -165,7 +165,7 @@ export class StepWeightSkin extends EventTarget {
     this.show_debug = value
   }
 
-  public set_debug_scene_object (scene: Scene): void {
+  public set_debug_scene_object (scene: Object3D): void {
     this.debug_scene_object = scene
   }
 

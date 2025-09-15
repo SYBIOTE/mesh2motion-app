@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+/* eslint-disable @typescript-eslint/naming-convention */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/unbound-method */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
@@ -28,6 +33,7 @@ import { ModelPreviewDisplay } from './lib/enums/ModelPreviewDisplay.ts'
 import { TransformControlType } from './lib/enums/TransformControlType.ts'
 import { ThemeManager } from './lib/ThemeManager.ts'
 import { AppRouter } from './lib/AppRouter'
+import { Animations } from './lib/Animations'
 
 export class Bootstrap {
   public readonly camera = Generators.create_camera()
@@ -38,7 +44,7 @@ export class Bootstrap {
   public is_transform_controls_dragging: boolean = false
   public readonly transform_controls_hover_distance: number = 0.03
 
-  public view_helper: CustomViewHelper
+  public view_helper!: CustomViewHelper
 
   public readonly theme_manager = new ThemeManager()
   public readonly ui = new UI()
@@ -69,6 +75,13 @@ export class Bootstrap {
     this.process_step = this.process_step_changed(ProcessStep.LoadModel)
     this.animate()
     this.inject_build_version()
+
+    // UI animations
+    Animations.attachMicroInteractions()
+    const tool_panel = document.getElementById('tool-panel')
+    if (tool_panel != null) {
+      Animations.fadeSlideInRight(tool_panel, 450, 24)
+    }
   }
 
   constructor () {
@@ -123,10 +136,25 @@ export class Bootstrap {
 
     this.controls.update()
 
-    this.view_helper = new CustomViewHelper(this.camera, document.getElementById('view-control-hitbox'))
+    const view_hitbox_el = document.getElementById('view-control-hitbox')
+    const safe_view_hitbox: HTMLElement = view_hitbox_el ?? (() => {
+      const div = document.createElement('div')
+      div.id = 'view-control-hitbox-fallback'
+      div.style.position = 'absolute'
+      div.style.width = '120px'
+      div.style.height = '120px'
+      div.style.bottom = '0'
+      div.style.left = '0'
+      document.body.appendChild(div)
+      return div
+    })()
+    this.view_helper = new CustomViewHelper(this.camera, safe_view_hitbox)
     this.view_helper.set_labels('X', 'Y', 'Z')
 
-    this.scene.add(this.transform_controls.getHelper())
+    const transform_helper = this.transform_controls.getHelper()
+    if (transform_helper !== undefined) {
+      this.scene.add(transform_helper)
+    }
 
     // make transform control axis a bit smaller so they don't interfere with other points
     this.transform_controls.size = 1.0
@@ -138,7 +166,7 @@ export class Bootstrap {
   public regenerate_floor_grid (): void {
     // remove previous setup objects from scene if they exist
     const setup_container = this.scene.getObjectByName('Setup objects')
-    if (setup_container !== null) {
+    if (setup_container != null) {
       this.scene.remove(setup_container)
     }
 
@@ -156,8 +184,10 @@ export class Bootstrap {
 
     this.environment_container = new Group()
     this.environment_container.name = 'Setup objects'
-    this.environment_container.add(...Generators.create_default_lights(light_strength))
-    this.environment_container.add(...Generators.create_grid_helper(grid_color, floor_color))
+    const default_lights = Generators.create_default_lights(light_strength) as unknown as Object3D[]
+    const grid_helpers = Generators.create_grid_helper(grid_color, floor_color) as unknown as Object3D[]
+    this.environment_container.add(...default_lights)
+    this.environment_container.add(...grid_helpers)
     this.scene.add(this.environment_container)
   }
 
@@ -222,12 +252,19 @@ export class Bootstrap {
         }
         this.mesh_preview_display_type = ModelPreviewDisplay.Textured
         this.changed_model_preview_display(this.mesh_preview_display_type)
-        this.scene.add(this.load_model_step.model_meshes())
+        {
+          const model_meshes = this.load_model_step.model_meshes()
+          if (model_meshes != null) {
+            this.scene.add(model_meshes)
+          }
+        }
         process_step = ProcessStep.LoadSkeleton
         this.load_skeleton_step.begin()
         break
       case ProcessStep.EditSkeleton:
-        this.regenerate_skeleton_helper(this.edit_skeleton_step.skeleton())
+        if (this.edit_skeleton_step.skeleton() !== undefined) {
+          this.regenerate_skeleton_helper(this.edit_skeleton_step.skeleton())
+        }
         process_step = ProcessStep.EditSkeleton
         this.edit_skeleton_step.begin()
         this.edit_skeleton_step.setup_scene(this.scene)
@@ -237,15 +274,22 @@ export class Bootstrap {
         this.mesh_preview_display_type = ModelPreviewDisplay.WeightPainted
         this.changed_model_preview_display(this.mesh_preview_display_type)
         break
-      case ProcessStep.BindPose:
+      case ProcessStep.BindPose: {
         this.process_step = ProcessStep.BindPose
         this.transform_controls.enabled = false
         this.calculate_skin_weighting_for_models()
-        this.regenerate_skeleton_helper(this.weight_skin_step.skeleton())
-        this.scene.add(...this.weight_skin_step.final_skinned_meshes())
-        this.weight_skin_step.weight_painted_mesh_group().visible = false
+        if (this.weight_skin_step.skeleton() !== undefined) {
+          this.regenerate_skeleton_helper(this.weight_skin_step.skeleton()!)
+        }
+        const final_meshes = this.weight_skin_step.final_skinned_meshes() as unknown as Object3D[]
+        this.scene.add(...final_meshes)
+        const wp_group = this.weight_skin_step.weight_painted_mesh_group()
+        if (wp_group !== null) {
+          wp_group.visible = false
+        }
         this.process_step_changed(ProcessStep.AnimationsListing)
         break
+      }
       case ProcessStep.AnimationsListing:
         this.process_step = ProcessStep.AnimationsListing
         this.animations_listing_step.begin()
@@ -255,8 +299,11 @@ export class Bootstrap {
         }
         this.update_a_pose_options_visibility()
         if (this.load_skeleton_step.skeleton_type() === SkeletonType.Human) {
-          this.animations_listing_step.calculate_hip_bone_offset(this.load_skeleton_step.armature(),
-            this.edit_skeleton_step.armature())
+          const orig = this.load_skeleton_step.armature?.() ?? null
+          const edited = this.edit_skeleton_step.armature?.() ?? null
+          if (orig != null && edited != null) {
+            this.animations_listing_step.calculate_hip_bone_offset(orig, edited)
+          }
         }
         this.animations_listing_step.load_and_apply_default_animation_to_skinned_mesh(this.weight_skin_step.final_skinned_meshes(),
           this.load_skeleton_step.skeleton_type())
@@ -265,6 +312,11 @@ export class Bootstrap {
         }
         break
     }
+
+    // Animate current step label and active panel container when visible
+    const step_label = document.getElementById('current-step-label')
+    const active_panel = document.getElementById('tool-panel')
+    Animations.stepChange(step_label, active_panel)
 
     this.transform_controls.detach()
     this.router.update(process_step)
@@ -284,9 +336,9 @@ export class Bootstrap {
     this.renderer.render(this.scene, this.camera)
 
     // view helper
-    this.view_helper.render(this.renderer) // updates current viewport
-    if (this.view_helper.animating) {
-      this.view_helper.update(delta_time) // updates animation when clicking on axis
+    this.view_helper.render(this.renderer)
+    if (this.view_helper.is_animating()) {
+      this.view_helper.update(delta_time)
     }
   }
 
@@ -294,15 +346,20 @@ export class Bootstrap {
     this.mesh_preview_display_type = mesh_textured_display_type
 
     // show/hide loaded textured model depending on view
-    this.load_model_step.model_meshes().visible = this.mesh_preview_display_type === ModelPreviewDisplay.Textured
+    const model_meshes_obj = this.load_model_step.model_meshes()
+    if (model_meshes_obj != null) {
+      model_meshes_obj.visible = this.mesh_preview_display_type === ModelPreviewDisplay.Textured
+    }
 
     if (this.mesh_preview_display_type === ModelPreviewDisplay.WeightPainted) {
       this.regenerate_weight_painted_preview_mesh()
     }
 
     // show/hide weight painted mesh depending on view
-    this.weight_skin_step.weight_painted_mesh_group().visible =
-			this.mesh_preview_display_type === ModelPreviewDisplay.WeightPainted
+    const weight_group = this.weight_skin_step.weight_painted_mesh_group()
+    if (weight_group !== null) {
+      weight_group.visible = this.mesh_preview_display_type === ModelPreviewDisplay.WeightPainted
+    }
   }
 
   public changed_transform_controls_mode (radio_button_selected: string): void {
@@ -347,7 +404,7 @@ export class Bootstrap {
 
     // this returns 3 values, so we can destructure them. do not remove any of these
     // even if one of them is not used, otherwise there will be weird issues
-    const [closest_bone, closest_bone_index, closest_distance] = Utility.raycast_closest_bone_test(this.camera, mouse_event, skeleton_to_test)
+    const [closest_bone, _unused_index, closest_distance] = Utility.raycast_closest_bone_test(this.camera, mouse_event, skeleton_to_test)
 
     // don't allow to select root bone for now
     if (closest_bone?.name === 'root') {
@@ -364,7 +421,7 @@ export class Bootstrap {
       this.transform_controls.attach(closest_bone)
       this.edit_skeleton_step.set_currently_selected_bone(closest_bone)
     } else {
-      this.edit_skeleton_step.set_currently_selected_bone(null)
+      this.edit_skeleton_step.set_currently_selected_bone(null as any)
     }
   }
 
@@ -390,8 +447,12 @@ export class Bootstrap {
     this.weight_skin_step.reset_all_skin_process_data() // clear out any existing skinned meshes in storage
 
     // needed for skinning process if we change modes
-    this.weight_skin_step.create_bone_formula_object(this.edit_skeleton_step.armature(), this.edit_skeleton_step.algorithm(),
-      this.load_skeleton_step.skeleton_type())
+    const edit_armature = this.edit_skeleton_step.armature()
+    const algo = this.edit_skeleton_step.algorithm() ?? 'closest-distance-targeting'
+    const skel_type = this.load_skeleton_step.skeleton_type()
+    if (edit_armature != null && skel_type != null) {
+      this.weight_skin_step.create_bone_formula_object(edit_armature, algo, skel_type)
+    }
 
     this.weight_skin_step.create_binding_skeleton()
 
@@ -437,8 +498,14 @@ export class Bootstrap {
   public test_bone_weighting_success (): boolean {
     this.debugging_visual_object = Utility.regenerate_debugging_scene(this.scene) // clear out the debugging scene
 
-    this.weight_skin_step.create_bone_formula_object(this.edit_skeleton_step.armature(), this.edit_skeleton_step.algorithm(),
-      this.load_skeleton_step.skeleton_type())
+    {
+      const edit_armature = this.edit_skeleton_step.armature()
+      const algo = this.edit_skeleton_step.algorithm() ?? 'closest-distance-targeting'
+      const skel_type = this.load_skeleton_step.skeleton_type()
+      if (edit_armature != null && skel_type != null) {
+        this.weight_skin_step.create_bone_formula_object(edit_armature, algo, skel_type)
+      }
+    }
 
     if (this.edit_skeleton_step.show_debugging()) {
       this.weight_skin_step.set_show_debug(this.edit_skeleton_step.show_debugging())
@@ -454,8 +521,7 @@ export class Bootstrap {
       const tester_data: BoneTesterData = this.weight_skin_step.test_geometry()
 
       if (tester_data.bones_names_with_errors.length > 0) {
-        const names_with_object_index: string[] =
-					tester_data.bones_names_with_errors.map((bone_name: string) => bone_name + ` ${mesh_geometry.name}`)
+        const names_with_object_index: string[] = tester_data.bones_names_with_errors.map((bone_name: string) => bone_name + ` ${mesh_geometry.name}`)
         this.show_skin_failure_message(names_with_object_index, tester_data.bones_vertices_with_errors)
         testing_geometry_success = false
       }

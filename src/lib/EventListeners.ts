@@ -6,6 +6,37 @@ export class EventListeners {
   constructor (private readonly bootstrap: Bootstrap) {}
 
   public addEventListeners (): void {
+    // Stepper navigation
+    const route_map: Record<string, string> = {
+      'load-model': '/load-model',
+      'load-skeleton': '/load-skeleton',
+      edit: '/edit',
+      animate: '/animate',
+      export: '/export'
+    }
+    document.querySelectorAll('#stepper .step').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement
+        const step_key = target.getAttribute('data-step') ?? 'load-model'
+        const path = route_map[step_key]
+        if (path != null) {
+          // use router to navigate
+          history.pushState({}, '', path)
+          // trigger the app to handle route change
+          if (path === '/load-model') this.bootstrap.process_step_changed(ProcessStep.LoadModel)
+          else if (path === '/load-skeleton') this.bootstrap.process_step_changed(ProcessStep.LoadSkeleton)
+          else if (path === '/edit') this.bootstrap.process_step_changed(ProcessStep.EditSkeleton)
+          else if (path === '/animate') this.bootstrap.process_step_changed(ProcessStep.AnimationsListing)
+          else if (path === '/export') this.bootstrap.process_step_changed(ProcessStep.AnimationsListing)
+        }
+      })
+    })
+
+    // VRM banner dismiss
+    document.getElementById('vrm-banner-dismiss')?.addEventListener('click', () => {
+      const banner = document.getElementById('vrm-banner')
+      if (banner != null) { banner.style.display = 'none' }
+    })
     // monitor theme changes
     this.bootstrap.theme_manager.addEventListener('theme-changed', (event: any) => {
       this.bootstrap.regenerate_floor_grid()
@@ -64,12 +95,24 @@ export class EventListeners {
     })
 
     this.bootstrap.load_model_step.addEventListener('modelLoaded', () => {
+      // VRM detected: show banner, but do NOT auto-skip steps. Let user continue.
+      const is_vrm = this.bootstrap.load_model_step.is_vrm_loaded?.() ?? false
+      if (is_vrm) {
+        const banner = document.getElementById('vrm-banner')
+        if (banner != null) {
+          banner.style.display = 'flex'
+        }
+      }
+      // proceed to Load Skeleton as the next step by default
       this.bootstrap.process_step = this.bootstrap.process_step_changed(ProcessStep.LoadSkeleton)
+      // update stepper active/disabled states
+      this.updateStepper()
     })
 
     this.bootstrap.load_skeleton_step.addEventListener('skeletonLoaded', () => {
       this.bootstrap.edit_skeleton_step.load_original_armature_from_model(this.bootstrap.load_skeleton_step.armature())
       this.bootstrap.process_step = this.bootstrap.process_step_changed(ProcessStep.EditSkeleton)
+      this.updateStepper()
     })
 
     this.bootstrap.ui.dom_bind_pose_button?.addEventListener('click', () => {
@@ -77,6 +120,7 @@ export class EventListeners {
       if (passed_bone_skinning_test) {
         this.bootstrap.process_step_changed(ProcessStep.BindPose)
       }
+      this.updateStepper()
     })
 
     // rotate model after loading it in to orient it correctly
@@ -159,6 +203,7 @@ export class EventListeners {
       this.bootstrap.remove_skinned_meshes_from_scene() // clear any existing skinned meshes
       this.bootstrap.debugging_visual_object = Utility.regenerate_debugging_scene(this.bootstrap.scene)
       this.bootstrap.process_step = this.bootstrap.process_step_changed(ProcessStep.EditSkeleton)
+      this.updateStepper()
 
       // reset current bone selection for edit skeleton step
       this.bootstrap.edit_skeleton_step.set_currently_selected_bone?.(null as any)
@@ -174,10 +219,12 @@ export class EventListeners {
     // going back to load skeleton step from edit skeleton step
     this.bootstrap.ui.dom_back_to_load_skeleton_button?.addEventListener('click', () => {
       this.bootstrap.process_step = this.bootstrap.process_step_changed(ProcessStep.LoadSkeleton)
+      this.updateStepper()
     })
 
     this.bootstrap.ui.dom_back_to_load_model_button?.addEventListener('click', () => {
       this.bootstrap.process_step = this.bootstrap.process_step_changed(ProcessStep.LoadModel)
+      this.updateStepper()
     })
 
     this.bootstrap.ui.dom_transform_type_radio_group?.addEventListener('change', (event: Event) => {
@@ -234,5 +281,32 @@ export class EventListeners {
         this.bootstrap.edit_skeleton_step.redo_bone_transformation()
       }
     })
+  }
+
+  private updateStepper (): void {
+    const steps = ['load-model', 'load-skeleton', 'edit', 'animate', 'export']
+    const current = this.bootstrap.process_step
+    const reached: Record<string, boolean> = {
+      'load-model': true,
+      'load-skeleton': current !== ProcessStep.LoadModel,
+      edit: current === ProcessStep.EditSkeleton || current === ProcessStep.BindPose || current === ProcessStep.AnimationsListing,
+      animate: current === ProcessStep.AnimationsListing,
+      export: current === ProcessStep.AnimationsListing
+    }
+
+    steps.forEach((key) => {
+      const el = document.querySelector(`#stepper .step[data-step="${key}"]`)
+      if (el == null) return
+      el.classList.remove('active')
+      el.disabled = !reached[key]
+    })
+
+    // set active
+    let active_key = 'load-model'
+    if (current === ProcessStep.LoadSkeleton) active_key = 'load-skeleton'
+    else if (current === ProcessStep.EditSkeleton) active_key = 'edit'
+    else if (current === ProcessStep.AnimationsListing) active_key = 'animate'
+    const active_el = document.querySelector(`#stepper .step[data-step="${active_key}"]`)
+    active_el?.classList.add('active')
   }
 }
