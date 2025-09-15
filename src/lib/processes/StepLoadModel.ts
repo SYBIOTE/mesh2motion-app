@@ -160,7 +160,7 @@ export class StepLoadModel extends EventTarget {
     }
   }
 
-  private get_file_extension (file_path: string): string {
+  public get_file_extension (file_path: string): string {
     const file_name: string | undefined = file_path.split('/').pop() // remove the directory path
 
     if (file_name === undefined) {
@@ -434,4 +434,37 @@ export class StepLoadModel extends EventTarget {
       }
     })
   }
+
+  /**
+   * Public method to load a model from a file path (for React integration)
+   */
+  public load_model_from_path(modelPath: string): void {
+    const fileExtension = this.get_file_extension(modelPath);
+    this.load_model_file(modelPath, fileExtension);
+  }
+
+  /**
+   * Public method to load a model from a file (for React integration)
+   */
+  public load_model_from_file(file: File): void {
+    const reader = new FileReader();
+    const fileExtension = this.get_file_extension(file.name);
+    
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        this.original_uploaded_filename = file.name;
+        this.load_model_file(e.target.result as string, fileExtension);
+      }
+    };
+    
+    reader.readAsDataURL(file);
+  }
+
+  /**
+   * Public method to set debug mode (for React integration)
+   */
+  public set_debug_mode(enabled: boolean): void {
+    this.debug_model_loading = enabled;
+  }
+
 }

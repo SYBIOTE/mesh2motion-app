@@ -32,7 +32,7 @@ import { EventListeners } from './lib/EventListeners.ts'
 import { ModelPreviewDisplay } from './lib/enums/ModelPreviewDisplay.ts'
 import { TransformControlType } from './lib/enums/TransformControlType.ts'
 import { ThemeManager } from './lib/ThemeManager.ts'
-import { AppRouter } from './lib/AppRouter'
+// import { AppRouter } from './lib/AppRouter' // Replaced with React Router
 import { Animations } from './lib/Animations'
 
 export class Bootstrap {
@@ -66,12 +66,12 @@ export class Bootstrap {
   private readonly clock = new THREE.Clock()
   private environment_container: Group = new Group()
   private readonly eventListeners: EventListeners
-  private readonly router: AppRouter
+  // private readonly router: AppRouter // Replaced with React Router
 
   public initialize (): void {
     this.setup_environment()
     this.eventListeners.addEventListeners()
-    this.router.init()
+    // this.router.init() // Replaced with React Router
     this.process_step = this.process_step_changed(ProcessStep.LoadModel)
     this.animate()
     this.inject_build_version()
@@ -86,7 +86,7 @@ export class Bootstrap {
 
   constructor () {
     this.eventListeners = new EventListeners(this)
-    this.router = new AppRouter(this)
+    // this.router = new AppRouter(this) // Replaced with React Router
     this.animate = this.animate.bind(this)
 
     this.edit_skeleton_step.addEventListener('skeletonTransformed', () => {
@@ -319,7 +319,7 @@ export class Bootstrap {
     Animations.stepChange(step_label, active_panel)
 
     this.transform_controls.detach()
-    this.router.update(process_step)
+    // this.router.update(process_step) // Replaced with React Router
     return process_step
   }
 

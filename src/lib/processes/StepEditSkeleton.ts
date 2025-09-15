@@ -79,6 +79,20 @@ export class StepEditSkeleton extends EventTarget {
     return result
   }
 
+  /**
+   * Check if undo is available
+   */
+  public can_undo (): boolean {
+    return this.undo_redo_system.can_undo()
+  }
+
+  /**
+   * Check if redo is available
+   */
+  public can_redo (): boolean {
+    return this.undo_redo_system.can_redo()
+  }
+
   public setup_scene (main_scene: Scene): void {
     // add the skeleton to the scene
     this._main_scene_ref = main_scene
